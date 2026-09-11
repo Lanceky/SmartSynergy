@@ -90,6 +90,10 @@ class Settings(BaseModel):
         """
         if load_env_file:
             load_dotenv(dotenv_path=dotenv_path, override=False)
+        # boto3 treats AWS_PROFILE="" as a profile literally named "" and raises ProfileNotFound,
+        # so a blank line in .env must mean "use the default credential chain".
+        if os.environ.get("AWS_PROFILE", None) is not None and not os.environ["AWS_PROFILE"].strip():
+            os.environ.pop("AWS_PROFILE")
         raw = {field: os.environ[var] for field, var in _ENV_MAP.items() if var in os.environ}
         return cls(**raw)
 

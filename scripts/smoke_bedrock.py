@@ -20,14 +20,17 @@ def main() -> int:
     print(f"region={settings.aws_region} profile={settings.aws_profile or '<default chain>'} model={settings.model_id}")
 
     try:
+        import boto3
         from strands import Agent
         from strands.models import BedrockModel
     except ImportError as exc:  # pragma: no cover - environment problem, not logic
         print(f"strands-agents is not installed: {exc}", file=sys.stderr)
         return 2
 
+    # Explicit session so AWS_PROFILE from .env is honored and the region is unambiguous.
+    session = boto3.Session(profile_name=settings.aws_profile, region_name=settings.aws_region)
     agent = Agent(
-        model=BedrockModel(model_id=settings.model_id, region_name=settings.aws_region, temperature=0.0),
+        model=BedrockModel(model_id=settings.model_id, boto_session=session, temperature=0.0),
         system_prompt="You are a connectivity check. Follow the instruction literally.",
         callback_handler=None,  # no streaming to stdout; we print the final text ourselves
     )

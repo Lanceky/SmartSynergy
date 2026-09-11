@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -67,6 +68,15 @@ def test_dotenv_file_does_not_override_existing_env(tmp_path, monkeypatch):
     s = Settings.from_env(dotenv_path=env_file)
     assert s.aws_region == "us-east-1"
     assert s.contact_email == "lab@example.org"
+
+
+def test_blank_aws_profile_is_removed_from_environ(tmp_path, monkeypatch):
+    # A blank AWS_PROFILE would make boto3 raise ProfileNotFound; it must mean "default chain".
+    env_file = tmp_path / ".env"
+    env_file.write_text("AWS_PROFILE=\n")
+    s = Settings.from_env(dotenv_path=env_file)
+    assert s.aws_profile is None
+    assert "AWS_PROFILE" not in os.environ
 
 
 def test_get_settings_is_cached(monkeypatch):
