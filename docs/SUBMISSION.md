@@ -65,7 +65,7 @@ Two came from actually running the graph rather than reasoning about it.
 
 ## Accomplishments we're proud of
 
-The entire Strands graph is tested **offline**. A scripted `Model` provider lets the real graph — real agents, real tools, real gate node, real conditional edges — execute in CI with no network and no AWS account. 43 tests, all passing without credentials.
+The entire Strands graph is tested **offline**. A scripted `Model` provider lets the real graph — real agents, real tools, real gate node, real conditional edges — execute in CI with no network and no AWS account. 45 tests, all passing without credentials.
 
 And the demo uses real literature: `scripts/seed_demo.py` fetches live Europe PMC records and plays three consecutive days through the real pipeline. Day 1 builds a baseline and interrupts nobody. Day 2 is silent. Day 3 finds a contradiction and raises exactly one item. Every quoted passage is verified verbatim against the live abstract.
 

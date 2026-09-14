@@ -39,7 +39,11 @@ Europe PMC indexes papers days to weeks after publication, and corrections are a
 
 ### Why the watermark is conditional
 
-If a run fails halfway, or the search budget truncates it, advancing the watermark would skip that window permanently — and the next run would report "no changes." That is the worst possible failure for a monitoring tool: **silence that looks like reassurance.** So the watermark advances only on a fully complete pass, and partial coverage is displayed on the dossier.
+If a run fails halfway, or the search budget truncates it, advancing the watermark would skip that window permanently — and the next run would report "no changes." That is the worst possible failure for a monitoring tool: **silence that looks like reassurance.** So an incremental pass advances the watermark only when it covered its whole window, and partial coverage is displayed on the dossier.
+
+The **baseline** pass is the deliberate exception. The literature before a watch exists is effectively unbounded, so a baseline is always truncated by the paper budget; requiring complete coverage there would mean the watch never establishes a watermark and re-runs a baseline forever. A baseline is therefore treated as an explicitly bounded snapshot: it sets the watermark, and its dossier is labelled `coverage="truncated"` so the limitation stays visible rather than being quietly forgotten.
+
+Both rules are pinned by tests (`test_a_baseline_sets_the_watermark_even_though_it_is_bounded`, `test_a_truncated_incremental_pass_does_not_advance_the_watermark`).
 
 ---
 

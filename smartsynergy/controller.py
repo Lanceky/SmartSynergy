@@ -231,8 +231,19 @@ def run_watch(
 
             summary.hypotheses_checked += 1
 
-        # Only a fully complete pass may advance the watermark.
-        if run.coverage == "complete":
+        # Watermark discipline.
+        #
+        # An INCREMENTAL pass may only advance the watermark if it covered its whole window.
+        # Advancing after a truncated window would permanently skip whatever it did not read,
+        # and the next run would report "no changes" - silence that reads as reassurance.
+        #
+        # A BASELINE pass is different: the literature is effectively unbounded, so it is
+        # always truncated by the paper budget and would otherwise never establish a
+        # watermark at all, leaving the watch re-running a baseline forever. A baseline is
+        # therefore an explicitly bounded snapshot: it sets the watermark, and the dossier
+        # records `coverage="truncated"` so the limitation stays visible in the UI.
+        is_baseline = not watermark
+        if run.coverage == "complete" or is_baseline:
             store.set_watermark(watch_id, utcnow().isoformat())
         store.touch_checked(watch_id)
         run.status = "completed"

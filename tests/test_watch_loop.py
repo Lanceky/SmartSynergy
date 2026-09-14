@@ -259,3 +259,68 @@ def test_counterevidence_outranks_promising_news_in_the_inbox():
     assert [i.reason for i in order] == [
         "new_counterevidence", "source_corrected", "context_mismatch", "new_direct_evidence",
     ]
+
+
+class TruncatingEPMC:
+    """Search that always reports partial coverage, like a real broad query would."""
+
+    def __init__(self, records):
+        self.records = records
+
+    def search(self, query, max_records=8, **kw):  # noqa: ANN001
+        from smartsynergy.sources.base import SearchResult
+
+        return SearchResult(records=self.records, coverage="truncated", total_hits=9999)
+
+    def close(self):
+        pass
+
+
+def install_truncating(monkeypatch, sources, claims_json):
+    install_graph(monkeypatch, sources, claims_json)
+    graph_factory = controller.build_graph
+
+    def build(settings_, hyp_id):
+        run, gate = graph_factory(settings_, hyp_id)
+
+        def wrapped(task, invocation_state=None):
+            from smartsynergy.tools import get_context
+
+            result = run(task, invocation_state)
+            get_context().coverage = "truncated"
+            return result
+
+        return wrapped, gate
+
+    monkeypatch.setattr(controller, "build_graph", build)
+
+
+def test_a_baseline_sets_the_watermark_even_though_it_is_bounded(env):
+    """Otherwise the watch re-runs a baseline forever and never tracks changes."""
+    settings, store, monkeypatch = env
+    install_truncating(monkeypatch, [source("111", ABSTRACT_A)], analyst_json(SUPPORT))
+    summary = controller.run_watch("w1", settings=settings, store=store, verbose=False)
+
+    assert summary.status == "completed"
+    assert summary.coverage == "truncated"
+    assert store.watch_meta("w1").get("watermark"), "a baseline must establish a watermark"
+    assert store.latest_dossier("kras-egfr").coverage == "truncated", (
+        "the bound must stay visible on the dossier"
+    )
+
+
+def test_a_truncated_incremental_pass_does_not_advance_the_watermark(env):
+    """Skipping part of a window and then reporting silence is the worst failure mode."""
+    settings, store, monkeypatch = env
+    install_graph(monkeypatch, [source("111", ABSTRACT_A)], analyst_json(SUPPORT))
+    controller.run_watch("w1", settings=settings, store=store, verbose=False)
+    first = store.watch_meta("w1").get("watermark")
+    assert first
+
+    install_truncating(monkeypatch, [source("222", ABSTRACT_B)], analyst_json(OPPOSE))
+    summary = controller.run_watch("w1", settings=settings, store=store, verbose=False)
+
+    assert summary.coverage == "truncated"
+    assert store.watch_meta("w1").get("watermark") == first, (
+        "an incomplete incremental window must be re-scanned, not skipped"
+    )
