@@ -61,7 +61,7 @@ cat deploy/cron.example
 >
 > The gate can send the Analyst back — exactly once — then it must decide."
 
-**Show:** `smartsynergy/gates.py`, then `pytest tests/ -q` → 46 passing.
+**Show:** `smartsynergy/gates.py`, then `pytest tests/ -q` → 49 passing.
 
 > "Including the whole Strands graph, run offline against a scripted model provider."
 

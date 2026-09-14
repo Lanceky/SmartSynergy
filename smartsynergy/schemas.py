@@ -229,20 +229,37 @@ class EvidenceProfile(BaseModel):
     indirect_support: int = 0
     opposing: int = 0
     unclear: int = 0
+    unverified: int = 0
     strongest_design: StudyDesign = "not_reported"
     independent_sources: int = 0
     open_gaps: list[str] = Field(default_factory=list)
 
     @property
     def state(self) -> str:
+        """Derive an assessment state. Order matters, and it is the whole point.
+
+        Two orderings are deliberate:
+
+        1. Opposing evidence is considered BEFORE the "nothing found" branch. A single
+           opposing result with no support is evidence of *harm*, not absence of
+           evidence, and reporting it as `insufficient_evidence` would erase the
+           distinction this product exists to preserve.
+        2. `supported_in_scope` requires DIRECT support. Support that is only indirect
+           - a result in another tumour type or another variant - is reported as
+           `indirect_support_only`. Calling a colorectal result "supported in scope"
+           for a lung hypothesis is precisely the mistake the critic demotes claims to
+           prevent; the profile must not reintroduce it.
+        """
         if self.opposing and self.direct_support:
             return "conflicting_evidence"
+        if self.opposing:
+            return "needs_review"
         if self.direct_support == 0 and self.indirect_support == 0:
             return "insufficient_evidence"
         if self.strongest_design in ("cell_line", "animal"):
             return "preclinical_only"
-        if self.opposing:
-            return "needs_review"
+        if self.direct_support == 0:
+            return "indirect_support_only"
         return "supported_in_scope"
 
 

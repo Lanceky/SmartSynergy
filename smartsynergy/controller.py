@@ -39,6 +39,26 @@ def _short_id() -> str:
     return uuid.uuid4().hex[:10]
 
 
+_STATE_HEADLINE = {
+    "conflicting_evidence": "Evidence now points both ways for this pair",
+    "needs_review": "Evidence argues against this pair, or undercuts it",
+    "insufficient_evidence": "No verified evidence yet for this pair",
+    "preclinical_only": "Support for this pair is preclinical only",
+    "indirect_support_only": "Support for this pair is indirect, not in this context",
+    "supported_in_scope": "Directly applicable support for this pair",
+}
+
+
+def _state_headline(profile) -> str:  # noqa: ANN001
+    """A headline derived only from counted evidence.
+
+    Used whenever the editor's own headline cannot be trusted - it is the most
+    prominent string in the inbox, so it must never be free model prose that the
+    citation gate has already rejected.
+    """
+    return _STATE_HEADLINE.get(profile.state, profile.state)
+
+
 def _build_task(watch: Watch, hyp: Hypothesis, since: str | None, pass_note: str) -> str:
     terms_a = ", ".join(hyp.compound_a_synonyms or [hyp.compound_a])
     terms_b = ", ".join(hyp.compound_b_synonyms or [hyp.compound_b])
@@ -169,15 +189,24 @@ def run_watch(
             run.papers_seen += len(ctx.retrieved)
             run.papers_new += len(new_ids)
             run.tool_calls += ctx.tool_calls
-            if ctx.coverage != "complete":
+            if not ctx.searched:
+                # The agent produced an answer without ever running a search. Nothing was
+                # examined, so this pass establishes nothing about the window.
+                run.coverage = "not_retrieved"
+            elif ctx.coverage != "complete":
                 run.coverage = ctx.coverage  # type: ignore[assignment]
 
             editor_out = _editor_output(result)
             ok, brief, why = final_gate(editor_out.brief_markdown, claims)
+            headline = editor_out.headline
             if not ok:
                 if verbose:
                     print(f"  FINAL GATE REJECTED: {why}", flush=True)
                 brief = f"_Brief rejected by the citation gate: {why}. Evidence below is unaffected._"
+                # The headline is the most prominent text in the inbox and the export.
+                # If the brief could not be trusted, its headline cannot be either, so it
+                # is replaced by a description derived only from verified evidence.
+                headline = ""
 
             previous = store.latest_dossier(hyp.id)
             fingerprint = Dossier.compute_fingerprint(claims)
@@ -188,6 +217,7 @@ def run_watch(
                 summary.dossier_versions[hyp.id] = previous.version
                 continue
 
+            profile = build_profile(claims, gate_result.gaps)
             dossier = Dossier(
                 id=_short_id(),
                 version=(previous.version + 1) if previous else 1,
@@ -195,8 +225,8 @@ def run_watch(
                 hypothesis_id=hyp.id,
                 run_id=run.id,
                 claim_ids=[c.claim_id for c in claims],
-                profile=build_profile(claims, gate_result.gaps),
-                headline=editor_out.headline,
+                profile=profile,
+                headline=headline or _state_headline(profile),
                 brief_markdown=brief,
                 coverage=run.coverage,
                 coverage_note=f"{len(ctx.retrieved)} sources examined; {ctx.tool_calls} tool calls",
@@ -213,7 +243,7 @@ def run_watch(
                     hypothesis_id=hyp.id,
                     run_id=run.id,
                     reason=reason,
-                    headline=editor_out.headline or dossier.profile.state,
+                    headline=dossier.headline,
                     explanation=explanation,
                     before_version=previous.version if previous else None,
                     after_version=dossier.version,
@@ -242,8 +272,13 @@ def run_watch(
         # watermark at all, leaving the watch re-running a baseline forever. A baseline is
         # therefore an explicitly bounded snapshot: it sets the watermark, and the dossier
         # records `coverage="truncated"` so the limitation stays visible in the UI.
+        #
+        # Neither case may advance on `failed` or `not_retrieved`. Those mean the search
+        # did not happen or errored, so nothing at all is known about the window; treating
+        # that as a snapshot would skip the window on the strength of an outage.
         is_baseline = not watermark
-        if run.coverage == "complete" or is_baseline:
+        searched_something = run.coverage in ("complete", "truncated")
+        if searched_something and (run.coverage == "complete" or is_baseline):
             store.set_watermark(watch_id, utcnow().isoformat())
         store.touch_checked(watch_id)
         run.status = "completed"

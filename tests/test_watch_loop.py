@@ -65,6 +65,7 @@ class FakeGraph:
         for s in self.sources:
             ctx.retrieved[s.source_id] = s
         ctx.tool_calls += 2
+        ctx.record_coverage("complete")  # a real agent reaches this only by searching
 
         from smartsynergy.gates import evidence_gate
         from smartsynergy.schemas import AnalystOutput, CriticOutput
@@ -287,7 +288,7 @@ def install_truncating(monkeypatch, sources, claims_json):
             from smartsynergy.tools import get_context
 
             result = run(task, invocation_state)
-            get_context().coverage = "truncated"
+            get_context().record_coverage("truncated")
             return result
 
         return wrapped, gate
@@ -324,3 +325,92 @@ def test_a_truncated_incremental_pass_does_not_advance_the_watermark(env):
     assert store.watch_meta("w1").get("watermark") == first, (
         "an incomplete incremental window must be re-scanned, not skipped"
     )
+
+
+class SilentGraph(FakeGraph):
+    """An agent that answers without ever searching. It establishes nothing.
+
+    Identical to FakeGraph except that it never calls `record_coverage`, because no
+    search tool was ever invoked.
+    """
+
+    def __init__(self):
+        super().__init__([], json.dumps({"claims": [], "gaps": []}))
+
+    def __call__(self, task, invocation_state=None):  # noqa: ANN001
+        from smartsynergy.gates import evidence_gate
+        from smartsynergy.schemas import AnalystOutput, CriticOutput
+
+        result = evidence_gate(
+            AnalystOutput(claims=[], gaps=[]),
+            CriticOutput(verdict="no_issues_found_in_scope"),
+            hypothesis_id="kras-egfr",
+            run_id="r",
+            known_sources={},
+            followup_used=True,
+        )
+        self._gate = FakeGate(result)
+
+        class Node:
+            node_id = "analyst"
+
+        class Res:
+            execution_order = [Node()]
+            results: dict = {}
+
+        return Res()
+
+
+def test_a_run_that_never_searched_does_not_set_a_watermark(env):
+    """Otherwise an empty model reply silently marks the whole window as checked."""
+    settings, store, monkeypatch = env
+    holder = FakeGate(None)
+    graph = SilentGraph()
+
+    def fake_build(settings_, hyp_id):
+        def run(task, invocation_state=None):
+            res = graph(task, invocation_state)
+            holder.last_result = graph._gate.last_result
+            return res
+
+        return run, holder
+
+    monkeypatch.setattr(controller, "build_graph", fake_build)
+
+    summary = controller.run_watch("w1", settings=settings, store=store, verbose=False)
+
+    assert summary.coverage == "not_retrieved"
+    assert not store.watch_meta("w1").get("watermark"), (
+        "a pass that searched nothing must not claim to have covered the window"
+    )
+
+
+def test_budget_exhaustion_is_reported_to_the_run_not_just_the_model(env):
+    """The tool tells the model 'truncated'; the run has to hear it too."""
+    from smartsynergy.tools import RunContext, clear_context, search_literature, set_context
+
+    ctx = RunContext(watch_id="w1", run_id="r1", max_tool_calls=0)
+    token = set_context(ctx)
+    try:
+        out = search_literature("kras g12c", max_results=5)
+    finally:
+        clear_context(token)
+
+    assert "budget_exhausted" in out
+    assert ctx.coverage == "truncated", "budget exhaustion must degrade run coverage"
+
+
+def test_coverage_only_ever_gets_worse_within_a_run():
+    """A later good search does not undo an earlier missed one."""
+    from smartsynergy.tools import RunContext
+
+    ctx = RunContext(watch_id="w", run_id="r")
+    assert ctx.coverage == "not_retrieved"
+    ctx.record_coverage("complete")
+    assert ctx.coverage == "complete"
+    ctx.record_coverage("truncated")
+    assert ctx.coverage == "truncated"
+    ctx.record_coverage("complete")
+    assert ctx.coverage == "truncated", "coverage must not recover"
+    ctx.record_coverage("failed")
+    assert ctx.coverage == "failed"

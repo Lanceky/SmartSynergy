@@ -4,7 +4,7 @@
 
 An autonomous evidence watch for the people deciding which drug combinations are worth testing next — built on the [Strands Agents SDK](https://strandsagents.com).
 
-> **Track:** Professional Agents · **Licence:** Apache-2.0 · **46 tests, all passing without AWS**
+> **Track:** Professional Agents · **Licence:** Apache-2.0 · **49 tests, all passing without AWS**
 
 ---
 
@@ -159,7 +159,7 @@ The obvious design is a number: *87% synergy confidence*. It would demo beautifu
 
 So the `EvidenceProfile` keeps the dimensions apart — direct support, indirect support, opposing, strongest design, independent sources, open gaps — and derives a **state**, not a score:
 
-`supported_in_scope` · `conflicting_evidence` · `preclinical_only` · `insufficient_evidence` · `needs_review`
+`supported_in_scope` · `indirect_support_only` · `conflicting_evidence` · `preclinical_only` · `insufficient_evidence` · `needs_review`
 
 The distinction that matters most to a researcher is between **"no evidence"** and **"evidence of harm."** A score erases it. A state preserves it.
 
@@ -241,7 +241,7 @@ Full text is retrieved and stored only where the licence permits redistribution.
 ## Tests
 
 ```bash
-.venv/bin/python -m pytest tests/ -q      # 46 tests, no AWS credentials required
+.venv/bin/python -m pytest tests/ -q      # 49 tests, no AWS credentials required
 .venv/bin/python -m smartsynergy.worker doctor   # diagnoses setup precisely
 ```
 

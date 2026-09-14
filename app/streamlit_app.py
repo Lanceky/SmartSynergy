@@ -33,6 +33,7 @@ STATE_STYLE = {
     "preclinical_only": ("Preclinical only", "#7c3aed"),
     "needs_review": ("Needs review", "#b45309"),
     "supported_in_scope": ("Supported in scope", "#047857"),
+    "indirect_support_only": ("Indirect support only", "#0e7490"),
 }
 CONTEXT_LABEL = {
     "direct": "Direct — same disease and variant",

@@ -125,10 +125,19 @@ def evidence_gate(
 
 
 def build_profile(claims: list[EvidenceClaim], gaps: list[str]) -> EvidenceProfile:
-    """Separate dimensions. Deliberately never collapsed into a single score."""
+    """Separate dimensions. Deliberately never collapsed into a single score.
+
+    Only claims whose quoted passage was verified against the retrieved text are
+    counted. An unverified claim stays in the ledger - it is still visible, and still
+    auditable - but it must not move the assessment, because nothing establishes that
+    the underlying paper actually says it.
+    """
     profile = EvidenceProfile(open_gaps=gaps[:6])
     best = "not_reported"
     for c in claims:
+        if not c.passage_verified:
+            profile.unverified += 1
+            continue
         if c.label == "opposes":
             profile.opposing += 1
         elif c.label == "unclear":
@@ -140,7 +149,12 @@ def build_profile(claims: list[EvidenceClaim], gaps: list[str]) -> EvidenceProfi
         if c.label == "supports" and _DESIGN_RANK[c.study_design] > _DESIGN_RANK[best]:
             best = c.study_design
     profile.strongest_design = best  # type: ignore[assignment]
-    profile.independent_sources = len({c.source_id for c in claims})
+    profile.independent_sources = len({c.source_id for c in claims if c.passage_verified})
+    if profile.unverified:
+        profile.open_gaps = (
+            profile.open_gaps
+            + [f"{profile.unverified} claim(s) could not be verified and were not counted."]
+        )[:7]
     return profile
 
 
@@ -148,15 +162,20 @@ _CLAIM_REF = re.compile(r"\[claim:([^\]]+)\]")
 
 
 def final_gate(brief_markdown: str, accepted: list[EvidenceClaim]) -> tuple[bool, str, str]:
-    """Reject briefs that cite claim IDs which do not exist.
+    """Reject briefs that are not backed by verified, existing evidence.
 
     Returns (ok, cleaned_markdown, reason).
     """
-    valid = {c.claim_id for c in accepted}
+    valid = {c.claim_id for c in accepted if c.passage_verified}
     referenced = set(_CLAIM_REF.findall(brief_markdown or ""))
     unknown = {r for r in referenced if r not in valid}
     if unknown:
-        return False, brief_markdown, f"brief cites unknown claim ids: {sorted(unknown)[:3]}"
-    if accepted and not referenced:
-        return False, brief_markdown, "brief cites no evidence despite accepted claims existing"
+        # Either invented outright, or real but unverifiable. Both are unciteable.
+        return False, brief_markdown, f"brief cites unknown or unverified claim ids: {sorted(unknown)[:3]}"
+    if not valid and brief_markdown.strip():
+        # With nothing verified to cite, any prose is by definition uncited assertion.
+        # Without this, a confident sentence backed by zero evidence passes untouched.
+        return False, brief_markdown, "brief makes assertions but no verified claim supports them"
+    if valid and not referenced:
+        return False, brief_markdown, "brief cites no evidence despite verified claims existing"
     return True, brief_markdown, ""

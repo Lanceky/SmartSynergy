@@ -35,13 +35,26 @@ class RunContext:
     papers_seen: int = 0
     retrieved: dict[str, SourceRecord] = field(default_factory=dict)
     queries: list[str] = field(default_factory=list)
-    coverage: str = "complete"
+    coverage: str = "not_retrieved"
+    searched: bool = False
 
     def spend_tool_call(self) -> bool:
         if self.tool_calls >= self.max_tool_calls:
             return False
         self.tool_calls += 1
         return True
+
+    def record_coverage(self, coverage: str) -> None:
+        """Track the worst coverage any search reported.
+
+        Coverage may only ever get worse within a run. A later successful search does not
+        undo an earlier truncated or failed one - the evidence that search missed is still
+        missing, and the watermark decision depends on knowing that.
+        """
+        self.searched = True
+        rank = {"complete": 0, "truncated": 1, "failed": 2, "not_retrieved": 3}
+        if rank.get(coverage, 3) > rank.get(self.coverage, 3) or self.coverage == "not_retrieved":
+            self.coverage = coverage
 
 
 _CTX: contextvars.ContextVar[RunContext | None] = contextvars.ContextVar("run_ctx", default=None)
@@ -92,17 +105,20 @@ def search_literature(query: str, max_results: int = 8) -> str:
     """
     ctx = get_context()
     if not ctx.spend_tool_call():
+        # The model is told coverage is truncated; the run must be told too, or the
+        # controller will treat a budget-capped pass as a complete one.
+        ctx.record_coverage("truncated")
         return _err("budget_exhausted", coverage="truncated", hint="Summarize with what you have.")
 
     remaining = max(0, ctx.max_papers - ctx.papers_seen)
     if remaining == 0:
+        ctx.record_coverage("truncated")
         return _err("paper_budget_exhausted", coverage="truncated")
 
     limit = max(1, min(int(max_results), 15, remaining))
     result = ctx.epmc.search(query, max_records=limit)  # type: ignore[union-attr]
     ctx.queries.append(query)
-    if result.coverage != "complete":
-        ctx.coverage = result.coverage
+    ctx.record_coverage(result.coverage)
 
     out = []
     for rec in result.records:
