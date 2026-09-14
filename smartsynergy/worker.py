@@ -166,9 +166,19 @@ def cmd_export(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_doctor(args: argparse.Namespace) -> int:
+    from smartsynergy import doctor
+
+    return doctor.run(get_settings(), skip_aws=args.offline)
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="smartsynergy", description="Background evidence watch for combination-therapy hypotheses.")
     sub = p.add_subparsers(dest="command", required=True)
+
+    s = sub.add_parser("doctor", help="check dependencies, database, data sources and Bedrock access")
+    s.add_argument("--offline", action="store_true", help="skip the AWS checks")
+    s.set_defaults(func=cmd_doctor)
 
     s = sub.add_parser("init-watch", help="create or replace a watch from a JSON panel file")
     s.add_argument("path")

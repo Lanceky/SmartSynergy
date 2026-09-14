@@ -4,7 +4,7 @@
 
 An autonomous evidence watch for the people deciding which drug combinations are worth testing next — built on the [Strands Agents SDK](https://strandsagents.com).
 
-> **Track:** Professional Agents · **Licence:** Apache-2.0 · **Status:** working end to end
+> **Track:** Professional Agents · **Licence:** Apache-2.0 · **43 tests, all passing without AWS**
 
 ---
 
@@ -123,6 +123,7 @@ Full walkthrough: [`docs/architecture.md`](docs/architecture.md).
 | `structured_output_model` | Every agent returns a validated Pydantic model. No regex over prose anywhere |
 | `@tool` | Three tools that enforce their own budgets and refuse to exceed them |
 | `set_max_node_executions`, `set_node_timeout`, `reset_on_revisit` | A background agent that can loop forever is a background agent that generates a surprise bill |
+| Custom `Model` provider | `smartsynergy/testing.py` scripts a model so the **entire graph runs in CI** with no network and no AWS account |
 
 ---
 
@@ -176,10 +177,18 @@ Run it on a schedule — which is the whole point:
 0 6 * * *  cd /path/to/SmartSynergy && .venv/bin/python -m smartsynergy.worker run-due >> logs/watch.log 2>&1
 ```
 
+### See it work right now, without AWS
+
+```bash
+.venv/bin/python scripts/seed_demo.py
+```
+
+This fetches **real** records from Europe PMC and plays three consecutive days through the real controller, the real evidence gate and the real storage layer — only the model's judgment is scripted. Day 1 builds a baseline and interrupts nobody, day 2 is silent, day 3 finds a contradiction and raises exactly one inbox item. Every quoted passage is verified verbatim against the live abstract.
+
 ### Requirements
 
 - Python 3.13
-- An AWS account with **Amazon Bedrock** model access. Default is `us.amazon.nova-pro-v1:0`; any tool-use-capable model works via `BEDROCK_MODEL_ID`.
+- An AWS account with **Amazon Bedrock** model access. The default is `us.amazon.nova-pro-v1:0` because it needs no access request and supports the tool use that structured output depends on. Any tool-use-capable model works via `BEDROCK_MODEL_ID` — `us.anthropic.claude-sonnet-4-20250514-v1:0` gives better judgment if you have access to it.
 - No API keys for the data sources. Europe PMC and PubChem are public.
 
 ### Commands
@@ -193,6 +202,7 @@ Run it on a schedule — which is the whole point:
 | `decide <item> acknowledged\|dismissed\|acted_on` | Record the decision |
 | `list-runs` | Audit trail, including failures and partial coverage |
 | `export <hypothesis> --format markdown` | Full dossier with every evidence receipt |
+| `doctor` | Preflight: dependencies, database, Europe PMC, AWS credentials, model access, structured output |
 
 ---
 
@@ -222,10 +232,19 @@ Full text is retrieved and stored only where the licence permits redistribution.
 ## Tests
 
 ```bash
-.venv/bin/python -m pytest tests/ -q      # 37 tests, no AWS credentials required
+.venv/bin/python -m pytest tests/ -q      # 43 tests, no AWS credentials required
+.venv/bin/python -m smartsynergy.worker doctor   # diagnoses setup precisely
 ```
 
-The gate, fingerprint, change-detection, storage-guarantee and UI tests all run offline. Every rule in the trust table above has a test that would fail if the rule were removed.
+Every rule in the trust table above has a test that would fail if the rule were removed. More unusually, **the Strands graph itself is tested offline**: `smartsynergy/testing.py` implements the Strands `Model` interface with scripted responses, so `tests/test_graph_wiring.py` executes the real graph — real agents, real tools, real gate node, real conditional edges — with no network and no AWS account.
+
+That test caught a bug no amount of reading would have:
+
+> The graph's feedback edge sends the Analyst back for a second pass. Because a Strands `Graph` node fires when **any** incoming edge completes, and the Critic's previous result is still marked `COMPLETED`, the gate re-fired against **stale criticism** before the Critic had seen the new claims. The AND-join is now ordering-aware, and the test pins the exact path:
+>
+> `analyst → critic → gate → analyst → critic → gate → editor`
+
+A second finding worth recording: Strands implements `structured_output_model` by **injecting a tool named after the Pydantic model and forcing the model to call it** — it does not call `Model.structured_output()`. Any custom provider has to answer that forced tool call.
 
 ---
 

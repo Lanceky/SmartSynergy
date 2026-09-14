@@ -16,7 +16,10 @@ from pydantic import BaseModel, Field, field_validator
 SourceMode = Literal["live", "replay"]
 
 # Strands' documented default Bedrock model; override with BEDROCK_MODEL_ID.
-DEFAULT_MODEL_ID = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+# Amazon Nova Pro is the default because it needs no model-access request, supports the
+# tool use that Strands' structured output depends on, and is inexpensive enough to run a
+# watch nightly. Any tool-use-capable Bedrock model works via BEDROCK_MODEL_ID.
+DEFAULT_MODEL_ID = "us.amazon.nova-pro-v1:0"
 
 _ENV_MAP: dict[str, str] = {
     "aws_region": "AWS_REGION",
