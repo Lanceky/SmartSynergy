@@ -2,7 +2,20 @@
 
 Companion to [context.md](context.md). That document says *what* to build and *why*; this one says *how*, in the order that keeps the submission viable.
 
-**Status:** plan only. Nothing below is implemented yet. Tick the "Done when" checks as you go and keep the README honest about what actually shipped.
+**Status (Sept 14):** Steps 1-13 are implemented and tested. 43 tests pass with no AWS credentials.
+Shipped: schemas, storage, Europe PMC + PubChem adapters, budget-bounded tools, the three agents,
+the deterministic gates, the Strands Graph with a bounded feedback loop, the run controller, the
+worker CLI (`doctor`/`init-watch`/`run-watch`/`run-due`/`inbox`/`decide`/`list-runs`/`export`), the
+Streamlit console, Markdown/JSON export, the architecture doc, the demo script and the Devpost text.
+
+**Outstanding:**
+- A live Bedrock run: no AWS credentials have ever been available on this machine, so the
+  model-calling path is implemented and its wiring is proven offline (`tests/test_graph_wiring.py`
+  runs the real graph against a scripted `Model` provider) but has not been executed against Bedrock.
+  Run `python -m smartsynergy.worker doctor` once credentials exist - it checks credentials, model
+  access and structured output separately and prints a specific remedy for each failure.
+- Step 14 (AgentCore) - deliberately skipped; it is optional and the entry point is already shaped for it.
+- The demo video and the Devpost form (text is ready in `docs/SUBMISSION.md`).
 
 **Timeline (GMT+3):** planning on Sept 10 evening; supplied deadline Sept 15 03:00; internal submission target **Sept 14 21:00**.
 
