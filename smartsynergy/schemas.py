@@ -35,7 +35,7 @@ ChangeReason = Literal[
 ]
 RunStatus = Literal["running", "completed", "failed", "failed_gate", "failed_stale"]
 RunTrigger = Literal["scheduled", "manual", "replay"]
-ReviewState = Literal["open", "acknowledged", "dismissed"]
+ReviewState = Literal["open", "acknowledged", "dismissed", "acted_on"]
 
 DISCLAIMER = "Research hypothesis for expert review; not medical advice."
 
@@ -309,12 +309,16 @@ class ReviewItem(BaseModel):
 
     @property
     def urgency(self) -> int:
-        """Transparent ordering for the inbox - not a quality or efficacy score."""
+        """Inbox ordering only; higher is more urgent. Not a quality or efficacy score.
+
+        Evidence that something is WRONG outranks evidence that something is promising,
+        because acting on a retracted or misapplied result is the costlier mistake.
+        """
         return {
-            "new_counterevidence": 0,
-            "source_corrected": 1,
+            "new_counterevidence": 4,
+            "source_corrected": 3,
             "context_mismatch": 2,
-            "new_direct_evidence": 3,
+            "new_direct_evidence": 1,
         }[self.reason]
 
 

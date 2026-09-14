@@ -334,7 +334,7 @@ class Store:
             args.append(state)
         sql += " ORDER BY created_at DESC"
         items = [ReviewItem.model_validate_json(r["payload"]) for r in self.conn.execute(sql, args)]
-        return sorted(items, key=lambda i: (i.urgency, i.created_at))
+        return sorted(items, key=lambda i: (-i.urgency, i.created_at))
 
     def record_decision(self, item_id: str, state: str, note: str = "") -> None:
         row = self.conn.execute("SELECT payload FROM review_items WHERE id=?", (item_id,)).fetchone()
