@@ -32,3 +32,6 @@ Dockerfile.agentcore
 .vscode/
 .idea/
 .DS_Store
+
+# HTTP response cache (regenerated on demand)
+.cache/
