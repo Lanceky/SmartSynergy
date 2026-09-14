@@ -85,3 +85,22 @@ Python · Strands Agents SDK · Amazon Bedrock (Nova Pro) · Pydantic · SQLite 
 
 - Repo: https://github.com/Lanceky/SmartSynergy
 - `python scripts/seed_demo.py` runs the full story with real papers and no AWS account.
+
+---
+
+## Submission checklist
+
+| Requirement | Where it is |
+| --- | --- |
+| Text description | this file (paste into Devpost) |
+| Public code repo | https://github.com/Lanceky/SmartSynergy — **set to public** |
+| Setup instructions | `README.md` → Quickstart |
+| Apache-2.0 license, visible in About | `LICENSE` — also pick it in the repo's About panel |
+| README | `README.md` |
+| **Architecture diagram** | `docs/architecture.png` — upload this to Devpost |
+| Demo video (≤5 min) | record from `docs/DEMO.md` |
+| AWS Builder ID | add yours on the Devpost form |
+| Live demo (optional) | Streamlit console, run locally |
+
+The diagram is generated, not drawn: `python scripts/make_architecture_diagram.py`
+rewrites `docs/architecture.svg`, so it cannot drift from the system it describes.

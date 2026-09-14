@@ -69,6 +69,13 @@ Anything else — a new paper repeating a known result, a rephrasing, a review a
 
 ## Architecture
 
+![SmartSynergy architecture](docs/architecture.svg)
+
+<sub>Regenerate with `python scripts/make_architecture_diagram.py`. A PNG for slide decks lives at [`docs/architecture.png`](docs/architecture.png).</sub>
+
+<details>
+<summary>Same diagram as Mermaid source</summary>
+
 ```mermaid
 flowchart TB
     CRON["cron / EventBridge<br/><i>worker run-due</i>"] --> CTRL
@@ -109,6 +116,8 @@ flowchart TB
     DB --> UI["Streamlit console<br/>evidence receipts · audit trail"]
     INBOX --> UI
 ```
+
+</details>
 
 Full walkthrough: [`docs/architecture.md`](docs/architecture.md).
 

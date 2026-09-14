@@ -1,5 +1,9 @@
 # Architecture
 
+![SmartSynergy architecture](architecture.svg)
+
+<sub>Source: [`scripts/make_architecture_diagram.py`](../scripts/make_architecture_diagram.py) · PNG: [`architecture.png`](architecture.png)</sub>
+
 ## The shape of the problem
 
 Most "research agent" designs are a loop: *search → read → summarise*. That works for a one-off question and fails as a standing watch, for three reasons:
