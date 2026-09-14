@@ -259,13 +259,13 @@ def test_structured_outputs_are_recovered_from_concatenated_node_text():
         ' "context_match": "direct"}], "gaps": ["no trial"], "searched_queries": ["q1"]}\n'
         'From critic:\n{"verdict": "issues_found", "challenges": [], "followup_queries": ["q2"]}'
     )
-    analyst, critic = parse_upstream(text)
+    analyst, critic, reported = parse_upstream(text)
     assert len(analyst.claims) == 1 and analyst.gaps == ["no trial"]
     assert critic.verdict == "issues_found" and critic.followup_queries == ["q2"]
 
 
 def test_malformed_model_output_degrades_instead_of_crashing():
-    analyst, critic = parse_upstream("the model replied in prose, with a stray { brace")
+    analyst, critic, reported = parse_upstream("the model replied in prose, with a stray { brace")
     assert analyst.claims == [] and critic.verdict == "no_issues_found_in_scope"
 
 
@@ -303,3 +303,38 @@ def test_run_table_columns_never_collide_for_a_long_watch_id(store, tmp_path, ca
         assert row[status_col:].startswith(("completed", "running", "failed")), (
             f"status not aligned under its header: {row!r}"
         )
+
+
+def test_a_missing_critic_reply_does_not_read_as_an_endorsement():
+    """The default verdict is 'no issues found'. A crashed critic must not borrow it."""
+    known = {"a1": src("a1")}
+    result = evidence_gate(
+        AnalystOutput(claims=[draft("a1", label="supports")]),
+        CriticOutput(verdict="no_issues_found_in_scope"),
+        hypothesis_id="h",
+        run_id="r",
+        known_sources=known,
+        followup_used=True,
+        critic_reported=False,
+    )
+    claim = result.accepted[0]
+    assert claim.critic_reviewed is False
+    assert any("critic_unavailable" in ch for ch in claim.challenged_by)
+
+    profile = build_profile(result.accepted, result.gaps)
+    assert profile.direct_support == 0, "an unreviewed claim must not count as support"
+    assert profile.unverified == 1
+    assert profile.state == "insufficient_evidence"
+
+    ok, _, why = final_gate(f"claim [claim:{claim.claim_id}]", result.accepted)
+    assert not ok and "unverified" in why, "an unreviewed claim must not be citeable"
+
+
+def test_parse_upstream_reports_whether_a_critic_actually_replied():
+    good = '{"verdict": "issues_found", "challenges": []}'
+    _, critic, reported = parse_upstream(good)
+    assert reported is True and critic.verdict == "issues_found"
+
+    _, critic2, reported2 = parse_upstream("the model replied in prose only")
+    assert reported2 is False
+    assert critic2.verdict == "no_issues_found_in_scope", "default is preserved for callers"

@@ -176,6 +176,15 @@ def run_watch(
 
     try:
         targets = [h for h in watch.hypotheses if not hypothesis_ids or h.id in hypothesis_ids]
+        if hypothesis_ids:
+            unknown = set(hypothesis_ids) - {h.id for h in watch.hypotheses}
+            if unknown:
+                raise ValueError(f"unknown hypothesis id(s) for {watch_id}: {sorted(unknown)}")
+        if not targets:
+            raise ValueError(f"no hypotheses selected for {watch_id}")
+        # A partial run examined only some hypotheses, so it cannot speak for the window
+        # of the ones it skipped. Recorded here and enforced at the watermark below.
+        partial_run = len(targets) < len(watch.hypotheses)
         for hyp in targets:
             if verbose:
                 print(f"\n=== {hyp.id}: {hyp.compound_a} + {hyp.compound_b} ===", flush=True)
@@ -322,9 +331,12 @@ def run_watch(
         # Neither case may advance on `failed` or `not_retrieved`. Those mean the search
         # did not happen or errored, so nothing at all is known about the window; treating
         # that as a snapshot would skip the window on the strength of an outage.
+        # A partial run (--hypothesis) never advances it either: the watermark is
+        # watch-wide, so advancing it would move the window past literature that the
+        # skipped hypotheses were never searched for.
         is_baseline = not watermark
         searched_something = run.coverage in ("complete", "truncated")
-        if searched_something and (run.coverage == "complete" or is_baseline):
+        if not partial_run and searched_something and (run.coverage == "complete" or is_baseline):
             store.set_watermark(watch_id, utcnow().isoformat())
         store.touch_checked(watch_id)
         run.status = "completed"

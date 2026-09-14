@@ -43,9 +43,17 @@ def _extract_json_objects(text: str) -> list[dict[str, Any]]:
     return found
 
 
-def parse_upstream(text: str) -> tuple[AnalystOutput, CriticOutput]:
-    """Recover the Analyst and Critic structured outputs from the node input text."""
+def parse_upstream(text: str) -> tuple[AnalystOutput, CriticOutput, bool]:
+    """Recover the Analyst and Critic structured outputs from the node input text.
+
+    Returns (analyst, critic, critic_reported). The third value matters: the default
+    CriticOutput is `no_issues_found_in_scope`, which is indistinguishable from a critic
+    that genuinely found nothing wrong. Silently treating a missing or malformed critic
+    reply as an endorsement would fail open on the one step the whole design rests on,
+    so the caller is told whether a critic actually reported.
+    """
     analyst, critic = AnalystOutput(), CriticOutput(verdict="no_issues_found_in_scope")
+    critic_reported = False
     for obj in _extract_json_objects(text):
         if "claims" in obj and "searched_queries" in obj:
             try:
@@ -55,9 +63,10 @@ def parse_upstream(text: str) -> tuple[AnalystOutput, CriticOutput]:
         elif "verdict" in obj:
             try:
                 critic = CriticOutput.model_validate(obj)
+                critic_reported = True
             except Exception:  # noqa: BLE001
                 pass
-    return analyst, critic
+    return analyst, critic, critic_reported
 
 
 def _as_node_result(name: str, text: str, started: float) -> MultiAgentResult:
@@ -90,7 +99,7 @@ class EvidenceGateNode(MultiAgentBase):
         text = task if isinstance(task, str) else "\n".join(
             getattr(b, "text", "") or (b.get("text", "") if isinstance(b, dict) else "") for b in task
         )
-        analyst, critic = parse_upstream(text)
+        analyst, critic, critic_reported = parse_upstream(text)
         ctx = get_context()
 
         result = evidence_gate(
@@ -100,6 +109,7 @@ class EvidenceGateNode(MultiAgentBase):
             run_id=ctx.run_id,
             known_sources=ctx.retrieved,
             followup_used=self.followup_used,
+            critic_reported=critic_reported,
         )
         if result.needs_followup:
             self.followup_used = True

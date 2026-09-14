@@ -60,6 +60,7 @@ def evidence_gate(
     run_id: str,
     known_sources: dict[str, SourceRecord],
     followup_used: bool,
+    critic_reported: bool = True,
 ) -> GateResult:
     """Validate analyst claims against what was actually retrieved, then fold in challenges."""
     result = GateResult(gaps=list(analyst.gaps))
@@ -96,7 +97,12 @@ def evidence_gate(
             hypothesis_id=hypothesis_id,
             run_id=run_id,
             passage_verified=verified,
+            critic_reviewed=critic_reported,
         )
+        if not critic_reported:
+            claim.challenged_by.append(
+                "critic_unavailable: claim was never adversarially reviewed"
+            )
 
         # 4. Critic challenges are applied deterministically, not left to the editor's goodwill.
         for ch in challenges_by_source.get(draft.source_id, []):
@@ -118,6 +124,8 @@ def evidence_gate(
 
     if not any(c.passage_verified for c in result.accepted):
         result.gaps.append("No claim passage could be verified against retrieved text.")
+    if not critic_reported and result.accepted:
+        result.gaps.append("The adversarial critic did not report; claims are unreviewed.")
 
     result.followup_queries = list(critic.followup_queries)
     result.needs_followup = bool(critic.followup_queries) and not followup_used
@@ -135,7 +143,9 @@ def build_profile(claims: list[EvidenceClaim], gaps: list[str]) -> EvidenceProfi
     profile = EvidenceProfile(open_gaps=gaps[:6])
     best = "not_reported"
     for c in claims:
-        if not c.passage_verified:
+        if not c.passage_verified or not c.critic_reviewed:
+            # Unverified quote, or never adversarially reviewed. Either way nothing
+            # establishes it well enough to move the assessment.
             profile.unverified += 1
             continue
         if c.label == "opposes":
@@ -149,11 +159,13 @@ def build_profile(claims: list[EvidenceClaim], gaps: list[str]) -> EvidenceProfi
         if c.label == "supports" and _DESIGN_RANK[c.study_design] > _DESIGN_RANK[best]:
             best = c.study_design
     profile.strongest_design = best  # type: ignore[assignment]
-    profile.independent_sources = len({c.source_id for c in claims if c.passage_verified})
+    profile.independent_sources = len(
+        {c.source_id for c in claims if c.passage_verified and c.critic_reviewed}
+    )
     if profile.unverified:
         profile.open_gaps = (
             profile.open_gaps
-            + [f"{profile.unverified} claim(s) could not be verified and were not counted."]
+            + [f"{profile.unverified} claim(s) were unverified or unreviewed and were not counted."]
         )[:7]
     return profile
 
@@ -166,7 +178,7 @@ def final_gate(brief_markdown: str, accepted: list[EvidenceClaim]) -> tuple[bool
 
     Returns (ok, cleaned_markdown, reason).
     """
-    valid = {c.claim_id for c in accepted if c.passage_verified}
+    valid = {c.claim_id for c in accepted if c.passage_verified and c.critic_reviewed}
     referenced = set(_CLAIM_REF.findall(brief_markdown or ""))
     unknown = {r for r in referenced if r not in valid}
     if unknown:

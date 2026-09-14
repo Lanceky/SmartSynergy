@@ -155,6 +155,7 @@ class EvidenceClaim(EvidenceClaimDraft):
     hypothesis_id: str
     run_id: str
     passage_verified: bool = False
+    critic_reviewed: bool = True
     challenged_by: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=utcnow)
 
