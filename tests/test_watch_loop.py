@@ -414,3 +414,51 @@ def test_coverage_only_ever_gets_worse_within_a_run():
     assert ctx.coverage == "truncated", "coverage must not recover"
     ctx.record_coverage("failed")
     assert ctx.coverage == "failed"
+
+
+def test_a_quiet_incremental_run_does_not_erase_established_evidence(env):
+    """The second run finds nothing new. Yesterday's evidence must still be there.
+
+    A real incremental search is date-filtered, so a quiet day returns no records and
+    the analyst has nothing to extract. If the dossier is rebuilt from only that run's
+    output, the accumulated evidence silently vanishes and a supported hypothesis
+    reverts to 'insufficient_evidence' without anything having refuted it.
+    """
+    settings, store, monkeypatch = env
+
+    install_graph(monkeypatch, [source("111", ABSTRACT_A)], analyst_json(SUPPORT))
+    controller.run_watch("w1", settings=settings, store=store, verbose=False)
+    first = store.latest_dossier("kras-egfr")
+    assert first.profile.direct_support == 1, "baseline should establish support"
+
+    # A quiet day: nothing indexed, so nothing retrieved and nothing extracted.
+    install_graph(monkeypatch, [], json.dumps({"claims": [], "gaps": []}))
+    controller.run_watch("w1", settings=settings, store=store, verbose=False)
+
+    latest = store.latest_dossier("kras-egfr")
+    assert latest.profile.direct_support == 1, (
+        f"evidence was erased by a quiet run: state is now {latest.profile.state!r}"
+    )
+    assert latest.version == first.version, (
+        "a quiet day changes nothing, so it must not create a new dossier version"
+    )
+    assert len(store.list_inbox("w1")) == 0, "a quiet day must not raise an alert"
+
+
+def test_a_source_re_examined_later_supersedes_its_earlier_claims(env):
+    """Carrying claims forward must not freeze them: a retraction has to take effect."""
+    settings, store, monkeypatch = env
+
+    install_graph(monkeypatch, [source("111", ABSTRACT_A)], analyst_json(SUPPORT))
+    controller.run_watch("w1", settings=settings, store=store, verbose=False)
+    assert store.latest_dossier("kras-egfr").profile.direct_support == 1
+
+    # The SAME source id is examined again; its record now carries the opposing result.
+    superseding = dict(OPPOSE, source_id="111")
+    install_graph(monkeypatch, [source("111", ABSTRACT_B)], analyst_json(superseding))
+    controller.run_watch("w1", settings=settings, store=store, verbose=False)
+
+    profile = store.latest_dossier("kras-egfr").profile
+    assert profile.direct_support == 0, "the superseded supporting claim must be gone"
+    assert profile.opposing == 1
+    assert profile.independent_sources == 1, "the source must not be double counted"

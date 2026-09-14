@@ -2,7 +2,7 @@
 
 Companion to [context.md](context.md). That document says *what* to build and *why*; this one says *how*, in the order that keeps the submission viable.
 
-**Status (Sept 14):** Steps 1-13 are implemented and tested. 49 tests pass with no AWS credentials.
+**Status (Sept 14):** Steps 1-13 are implemented and tested. 51 tests pass with no AWS credentials.
 Shipped: schemas, storage, Europe PMC + PubChem adapters, budget-bounded tools, the three agents,
 the deterministic gates, the Strands Graph with a bounded feedback loop, the run controller, the
 worker CLI (`doctor`/`init-watch`/`run-watch`/`run-due`/`inbox`/`decide`/`list-runs`/`export`), the
@@ -11,7 +11,7 @@ the Devpost text.
 
 **Verified from a clean `git clone` (Sept 14):** fresh venv + `requirements.lock.txt` installs,
 `doctor --offline` passes, `init-watch` loads the panel, `scripts/seed_demo.py` plays the full
-three-day story against live Europe PMC, all 49 tests pass and the Streamlit console serves 200.
+three-day story against live Europe PMC, all 51 tests pass and the Streamlit console serves 200.
 The documented setup instructions work as written.
 
 **Outstanding:**

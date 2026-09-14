@@ -184,7 +184,6 @@ def run_watch(
             if gate_result is None:
                 raise RuntimeError(f"{hyp.id}: evidence gate never ran")
 
-            claims = gate_result.accepted
             new_ids = set(store.upsert_sources(watch_id, run.id, ctx.retrieved.values()))
             run.papers_seen += len(ctx.retrieved)
             run.papers_new += len(new_ids)
@@ -195,6 +194,27 @@ def run_watch(
                 run.coverage = "not_retrieved"
             elif ctx.coverage != "complete":
                 run.coverage = ctx.coverage  # type: ignore[assignment]
+
+            previous = store.latest_dossier(hyp.id)
+
+            # The dossier is CUMULATIVE, not a snapshot of one run.
+            #
+            # An incremental search is date-filtered, so a quiet week legitimately returns
+            # nothing and the analyst extracts nothing. Rebuilding the dossier from only
+            # this run's output would erase every previously established finding and quietly
+            # downgrade the hypothesis to "insufficient evidence" without anything having
+            # refuted it.
+            #
+            # Claims are carried forward UNLESS their source was examined again in this run.
+            # A re-examined source yields fresh claims that supersede the old ones, so
+            # retractions, critic demotions and corrections still take effect.
+            carried: list[EvidenceClaim] = []
+            if previous:
+                refreshed = set(ctx.retrieved)
+                carried = [
+                    c for c in store.get_claims(previous.claim_ids) if c.source_id not in refreshed
+                ]
+            claims = carried + gate_result.accepted
 
             editor_out = _editor_output(result)
             ok, brief, why = final_gate(editor_out.brief_markdown, claims)
@@ -208,7 +228,6 @@ def run_watch(
                 # is replaced by a description derived only from verified evidence.
                 headline = ""
 
-            previous = store.latest_dossier(hyp.id)
             fingerprint = Dossier.compute_fingerprint(claims)
 
             if previous and previous.fingerprint == fingerprint:
