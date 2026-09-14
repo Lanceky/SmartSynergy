@@ -7,7 +7,7 @@ exported file cannot contain a citation the database does not have.
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 from smartsynergy.schemas import DISCLAIMER, Dossier, EvidenceClaim, SourceRecord
 
@@ -120,6 +120,6 @@ def dossier_json(
         "claims": [c.model_dump(mode="json") for c in claims],
         "sources": {k: v.model_dump(mode="json") for k, v in sources.items()},
         "disclaimer": DISCLAIMER,
-        "exported_at": datetime.utcnow().isoformat() + "Z",
+        "exported_at": datetime.now(timezone.utc).isoformat(),
     }
     return json.dumps(payload, indent=2)
