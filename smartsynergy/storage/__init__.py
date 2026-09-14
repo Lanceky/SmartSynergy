@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
@@ -106,8 +107,14 @@ class Store:
     def __init__(self, db_path: str | Path) -> None:
         self.path = Path(db_path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(self.path, isolation_level=None, timeout=30)
+        # check_same_thread=False: Streamlit reruns the script on a different thread each
+        # time. sqlite3.threadsafety == 3 (serialized), and multi-statement transactions are
+        # additionally guarded by self._lock below.
+        self.conn = sqlite3.connect(
+            self.path, isolation_level=None, timeout=30, check_same_thread=False
+        )
         self.conn.row_factory = sqlite3.Row
+        self._lock = threading.RLock()
         self.conn.executescript(SCHEMA)
 
     # ------------------------------------------------------------------ watches
@@ -143,6 +150,7 @@ class Store:
 
     # ------------------------------------------------------------------ runs
     def start_run(self, run: Run) -> Run:
+      with self._lock:
         self._sweep_stale_runs()
         try:
             self.conn.execute(
@@ -267,8 +275,9 @@ class Store:
     ) -> bool:
         """Persist a hypothesis result atomically. Returns True if a NEW review item was created."""
         created = False
-        self.conn.execute("BEGIN IMMEDIATE")
+        self._lock.acquire()
         try:
+            self.conn.execute("BEGIN IMMEDIATE")
             if claims:
                 self.save_claims(claims)
             if dossier:
@@ -310,6 +319,8 @@ class Store:
         except Exception:
             self.conn.execute("ROLLBACK")
             raise
+        finally:
+            self._lock.release()
         return created
 
     # ------------------------------------------------------------------ review inbox
