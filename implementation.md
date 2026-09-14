@@ -6,7 +6,13 @@ Companion to [context.md](context.md). That document says *what* to build and *w
 Shipped: schemas, storage, Europe PMC + PubChem adapters, budget-bounded tools, the three agents,
 the deterministic gates, the Strands Graph with a bounded feedback loop, the run controller, the
 worker CLI (`doctor`/`init-watch`/`run-watch`/`run-due`/`inbox`/`decide`/`list-runs`/`export`), the
-Streamlit console, Markdown/JSON export, the architecture doc, the demo script and the Devpost text.
+Streamlit console, Markdown/JSON export, the generated architecture diagram, the demo script and
+the Devpost text.
+
+**Verified from a clean `git clone` (Sept 14):** fresh venv + `requirements.lock.txt` installs,
+`doctor --offline` passes, `init-watch` loads the panel, `scripts/seed_demo.py` plays the full
+three-day story against live Europe PMC, all 46 tests pass and the Streamlit console serves 200.
+The documented setup instructions work as written.
 
 **Outstanding:**
 - A live Bedrock run: no AWS credentials have ever been available on this machine, so the
