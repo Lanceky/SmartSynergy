@@ -1,0 +1,26 @@
+{
+  "id": "kras-g12c-nsclc",
+  "gene": "KRAS",
+  "variant": "G12C",
+  "disease": "non-small cell lung cancer",
+  "disease_synonyms": ["NSCLC", "non-small cell lung cancer", "lung adenocarcinoma"],
+  "schedule_cron": "0 6 * * *",
+  "hypotheses": [
+    {
+      "id": "kras-shp2",
+      "question": "Does combining a KRAS G12C inhibitor with an SHP2 inhibitor show evidence of benefit over the KRAS G12C inhibitor alone in NSCLC?",
+      "compound_a": "sotorasib",
+      "compound_b": "SHP2 inhibitor",
+      "rationale": "Adaptive RTK-SHP2-RAS feedback is a widely studied resistance route to KRAS G12C inhibition; curator-selected because the literature contains both supporting preclinical work and cautionary clinical findings.",
+      "anchor_source_ids": []
+    },
+    {
+      "id": "kras-egfr",
+      "question": "Does combining a KRAS G12C inhibitor with an EGFR inhibitor show evidence of benefit in KRAS G12C NSCLC?",
+      "compound_a": "adagrasib",
+      "compound_b": "cetuximab",
+      "rationale": "Curator-selected: strong evidence exists in colorectal cancer, which makes it a deliberate test of whether the agent keeps other-tumor evidence out of direct support for NSCLC.",
+      "anchor_source_ids": []
+    }
+  ]
+}
