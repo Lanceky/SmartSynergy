@@ -2,7 +2,7 @@
 
 Companion to [context.md](context.md). That document says *what* to build and *why*; this one says *how*, in the order that keeps the submission viable.
 
-**Status (Sept 14):** Steps 1-13 are implemented and tested. 45 tests pass with no AWS credentials.
+**Status (Sept 14):** Steps 1-13 are implemented and tested. 46 tests pass with no AWS credentials.
 Shipped: schemas, storage, Europe PMC + PubChem adapters, budget-bounded tools, the three agents,
 the deterministic gates, the Strands Graph with a bounded feedback loop, the run controller, the
 worker CLI (`doctor`/`init-watch`/`run-watch`/`run-due`/`inbox`/`decide`/`list-runs`/`export`), the

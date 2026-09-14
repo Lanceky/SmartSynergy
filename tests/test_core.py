@@ -267,3 +267,39 @@ def test_structured_outputs_are_recovered_from_concatenated_node_text():
 def test_malformed_model_output_degrades_instead_of_crashing():
     analyst, critic = parse_upstream("the model replied in prose, with a stray { brace")
     assert analyst.claims == [] and critic.verdict == "no_issues_found_in_scope"
+
+
+# --- CLI output: the operator has to be able to read it -----------------------------
+
+
+def test_run_table_columns_never_collide_for_a_long_watch_id(store, tmp_path, capsys, monkeypatch):
+    """A fixed column width runs the watch id straight into the status column."""
+    import argparse
+    import contextlib
+
+    from smartsynergy import worker
+    from smartsynergy.schemas import Run
+
+    long_id = "a-watch-id-that-is-much-longer-than-any-guess"
+    store.save_watch(
+        Watch(
+            id=long_id, gene="KRAS", variant="G12C", disease="NSCLC",
+            hypotheses=[Hypothesis(id="h2", question="Q?", compound_a="A", compound_b="B")],
+        )
+    )
+    run = Run(id="r9", watch_id=long_id, trigger="manual")
+    store.start_run(run)
+    run.status = "completed"
+    store.finish_run(run)
+
+    monkeypatch.setattr(worker, "_store", lambda: contextlib.nullcontext(store))
+    worker.cmd_list_runs(argparse.Namespace(watch_id=None, limit=10))
+
+    header, *rows = capsys.readouterr().out.strip().splitlines()
+    assert long_id in "".join(rows)
+    status_col = header.index("STATUS")
+    for row in rows:
+        assert row[status_col - 1] == " ", f"columns collided: {row!r}"
+        assert row[status_col:].startswith(("completed", "running", "failed")), (
+            f"status not aligned under its header: {row!r}"
+        )

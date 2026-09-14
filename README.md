@@ -4,7 +4,7 @@
 
 An autonomous evidence watch for the people deciding which drug combinations are worth testing next — built on the [Strands Agents SDK](https://strandsagents.com).
 
-> **Track:** Professional Agents · **Licence:** Apache-2.0 · **45 tests, all passing without AWS**
+> **Track:** Professional Agents · **Licence:** Apache-2.0 · **46 tests, all passing without AWS**
 
 ---
 
@@ -241,7 +241,7 @@ Full text is retrieved and stored only where the licence permits redistribution.
 ## Tests
 
 ```bash
-.venv/bin/python -m pytest tests/ -q      # 45 tests, no AWS credentials required
+.venv/bin/python -m pytest tests/ -q      # 46 tests, no AWS credentials required
 .venv/bin/python -m smartsynergy.worker doctor   # diagnoses setup precisely
 ```
 

@@ -129,14 +129,32 @@ def cmd_list_runs(args: argparse.Namespace) -> int:
     if not runs:
         print("no runs yet")
         return 0
-    print(f"{'RUN':<12}{'WATCH':<14}{'STATUS':<11}{'TRIGGER':<11}{'NEW':<6}{'COVERAGE':<12}STARTED")
-    for r in runs:
-        print(
-            f"{r.id:<12}{r.watch_id:<14}{r.status:<11}{r.trigger:<11}{r.papers_new:<6}"
-            f"{r.coverage:<12}{r.started_at:%Y-%m-%d %H:%M}"
-        )
+
+    rows = [
+        [
+            r.id,
+            r.watch_id,
+            r.status,
+            r.trigger,
+            str(r.papers_new),
+            r.coverage,
+            f"{r.started_at:%Y-%m-%d %H:%M}",
+        ]
+        for r in runs
+    ]
+    header = ["RUN", "WATCH", "STATUS", "TRIGGER", "NEW", "COVERAGE", "STARTED"]
+    # Size each column to its widest value; a fixed width silently runs the
+    # watch id into the status column for any id longer than the guess.
+    widths = [max(len(h), *(len(row[i]) for row in rows)) for i, h in enumerate(header)]
+
+    def line(cells: list[str]) -> str:
+        return "  ".join(c.ljust(w) for c, w in zip(cells, widths)).rstrip()
+
+    print(line(header))
+    for r, row in zip(runs, rows):
+        print(line(row))
         if r.error:
-            print(f"            error: {r.error}")
+            print(f"  {'':<{widths[0]}}error: {r.error}")
     return 0
 
 
