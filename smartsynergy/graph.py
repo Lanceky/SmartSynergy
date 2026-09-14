@@ -138,38 +138,59 @@ class EvidenceGateNode(MultiAgentBase):
         return asyncio.run(self.invoke_async(task, invocation_state, **kwargs))
 
 
-def _gate_says(marker: str):
+def _gate_says(gate: "EvidenceGateNode", marker: str):
+    """Route on the gate's own decision object rather than parsing its rendered text."""
+
     def condition(state: GraphState) -> bool:
-        node = state.results.get("gate")
-        return node is not None and str(node.result).lstrip().startswith(marker)
+        if "gate" not in state.results or gate.last_result is None:
+            return False
+        return gate.last_result.marker == marker
 
     return condition
 
 
 def _both_done(*node_ids: str):
-    """Python graphs fire on ANY incoming edge; the gate must wait for BOTH upstream agents."""
+    """Python graphs fire on ANY incoming edge; the gate must wait for BOTH upstream agents.
+
+    Completion alone is not enough. After the gate sends the Analyst back for a follow-up pass,
+    the Critic's result from the *previous* pass is still marked COMPLETED, so a naive check
+    lets the gate re-fire against stale criticism before the Critic has seen the new claims.
+    The order of the current execution is therefore what decides: every upstream node must have
+    run more recently than the first one listed.
+    """
 
     def condition(state: GraphState) -> bool:
-        return all(
+        if not all(
             n in state.results and state.results[n].status == Status.COMPLETED for n in node_ids
-        )
+        ):
+            return False
+        order = [n.node_id for n in state.execution_order]
+        try:
+            last_seen = [len(order) - 1 - order[::-1].index(n) for n in node_ids]
+        except ValueError:
+            return False
+        # The first node listed (the Analyst) starts a pass; every other must follow it.
+        return all(idx > last_seen[0] for idx in last_seen[1:])
 
     return condition
 
 
-def build_graph(settings: Settings, hypothesis_id: str) -> tuple[Any, EvidenceGateNode]:
+def build_graph(
+    settings: Settings, hypothesis_id: str, model: Any | None = None
+) -> tuple[Any, EvidenceGateNode]:
+    """Assemble the graph. `model` injects a scripted provider for offline tests."""
     gate = EvidenceGateNode(hypothesis_id)
     b = GraphBuilder()
-    b.add_node(make_analyst(settings), "analyst")
-    b.add_node(make_critic(settings), "critic")
+    b.add_node(make_analyst(settings, model), "analyst")
+    b.add_node(make_critic(settings, model), "critic")
     b.add_node(gate, "gate")
-    b.add_node(make_editor(settings), "editor")
+    b.add_node(make_editor(settings, model), "editor")
 
     b.add_edge("analyst", "critic")
     b.add_edge("analyst", "gate", condition=_both_done("analyst", "critic"))
     b.add_edge("critic", "gate", condition=_both_done("analyst", "critic"))
-    b.add_edge("gate", "analyst", condition=_gate_says("FOLLOWUP_REQUIRED"))
-    b.add_edge("gate", "editor", condition=_gate_says("GATE_PASSED"))
+    b.add_edge("gate", "analyst", condition=_gate_says(gate, "FOLLOWUP_REQUIRED"))
+    b.add_edge("gate", "editor", condition=_gate_says(gate, "GATE_PASSED"))
 
     b.set_entry_point("analyst")
     b.set_max_node_executions(9)  # backstop; the gate itself enforces the one-follow-up rule

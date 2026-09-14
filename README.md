@@ -222,7 +222,7 @@ Full text is retrieved and stored only where the licence permits redistribution.
 ## Tests
 
 ```bash
-.venv/bin/python -m pytest tests/ -q      # 33 tests, no AWS credentials required
+.venv/bin/python -m pytest tests/ -q      # 37 tests, no AWS credentials required
 ```
 
 The gate, fingerprint, change-detection, storage-guarantee and UI tests all run offline. Every rule in the trust table above has a test that would fail if the rule were removed.
