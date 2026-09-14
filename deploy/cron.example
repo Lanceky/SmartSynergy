@@ -1,0 +1,9 @@
+# SmartSynergy — the agent is a cron job, not an app.
+# Install with: crontab -e
+#
+# Runs every watch at 06:00 local. Most mornings this produces silence, which is the point.
+
+0 6 * * *  cd /srv/SmartSynergy && .venv/bin/python -m smartsynergy.worker run-due >> /srv/SmartSynergy/logs/watch.log 2>&1
+
+# Optional: a weekly deeper pass that ignores the daily cap.
+# 0 5 * * 0  cd /srv/SmartSynergy && .venv/bin/python -m smartsynergy.worker run-watch kras-g12c-nsclc --force >> /srv/SmartSynergy/logs/watch.log 2>&1
