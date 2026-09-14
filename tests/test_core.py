@@ -168,7 +168,7 @@ def test_change_detection_stays_silent_when_nothing_material_changed():
         id="d1", version=1, watch_id="w", hypothesis_id="h", run_id="r0",
         claim_ids=[c.claim_id for c in claims], fingerprint=Dossier.compute_fingerprint(claims),
     )
-    assert _detect_change(previous, claims, set()) is None
+    assert _detect_change(previous, claims, claims, set()) is None
 
 
 def test_new_directly_applicable_counterevidence_raises_an_alert():
@@ -182,14 +182,14 @@ def test_new_directly_applicable_counterevidence_raises_an_alert():
         id="d1", version=1, watch_id="w", hypothesis_id="h", run_id="r0",
         claim_ids=[c.claim_id for c in old], fingerprint=Dossier.compute_fingerprint(old),
     )
-    change = _detect_change(previous, new, {"b2"})
+    change = _detect_change(previous, old, new, {"b2"})
     assert change is not None and change[0] == "new_counterevidence"
 
 
 def test_baseline_run_creates_no_alerts():
     known = {"a1": src("a1")}
     claims = run_gate(AnalystOutput(claims=[draft("a1")]), CriticOutput(verdict="no_issues_found_in_scope"), known).accepted
-    assert _detect_change(None, claims, {"a1"}) is None
+    assert _detect_change(None, [], claims, {"a1"}) is None
 
 
 # --- storage: the guarantees a scheduler depends on ---------------------------------

@@ -78,27 +78,57 @@ def _build_task(watch: Watch, hyp: Hypothesis, since: str | None, pass_note: str
     )
 
 
+def _has(claim: EvidenceClaim, marker: str) -> bool:
+    return any(marker in ch for ch in claim.challenged_by)
+
+
 def _detect_change(
-    previous: Dossier | None, claims: list[EvidenceClaim], new_source_ids: set[str]
+    previous: Dossier | None,
+    previous_claims: list[EvidenceClaim],
+    claims: list[EvidenceClaim],
+    new_source_ids: set[str],
 ) -> tuple[ChangeReason, str] | None:
-    """Material change only. Another paper repeating a known finding is not an alert."""
+    """Material change only. Another paper repeating a known finding is not an alert.
+
+    Both NEW claims and REVISED ones are examined. A retraction is the motivating case:
+    the paper is not new and its finding text is unchanged, so its claim id is identical.
+    Looking only for unseen claim ids would absorb the retraction silently, which is the
+    single worst outcome for a tool whose whole promise is to catch exactly that.
+    """
     if previous is None:
         return None  # baseline: a dossier is created, but nothing to review yet
 
-    prev_parts = set(previous.claim_ids)
-    fresh = [c for c in claims if c.claim_id not in prev_parts]
-    if not fresh:
-        return None
+    prev_by_id = {c.claim_id: c for c in previous_claims}
+    fresh = [c for c in claims if c.claim_id not in prev_by_id]
+    revised = [(prev_by_id[c.claim_id], c) for c in claims if c.claim_id in prev_by_id]
 
+    # 1. Something previously relied upon is now unsound. Highest priority.
     for c in fresh:
-        if any("possible_correction" in ch for ch in c.challenged_by):
+        if _has(c, "possible_correction"):
             return "source_corrected", f"A tracked source ({c.source_id}) is flagged as corrected or retracted."
+    for before, after in revised:
+        if _has(after, "possible_correction") and not _has(before, "possible_correction"):
+            return "source_corrected", f"A source you are already relying on ({after.source_id}) is now flagged as corrected or retracted."
+
+    # 2. A tracked claim changed direction.
+    for before, after in revised:
+        if before.label == "supports" and after.label != "supports":
+            return "assessment_flipped", f"Evidence previously read as support no longer supports this hypothesis ({after.source_id})."
+
+    # 3. New evidence against.
     for c in fresh:
         if c.label == "opposes" and c.context_match == "direct":
             return "new_counterevidence", f"New directly-applicable evidence argues against this hypothesis ({c.source_id})."
+
+    # 4. Applicability was overstated - whether newly found or newly discovered.
+    for before, after in revised:
+        if before.context_match == "direct" and after.context_match != "direct":
+            return "context_mismatch", f"Evidence previously read as applicable is from a different context ({after.source_id})."
     for c in fresh:
-        if c.context_match.startswith("indirect") and any("context_mismatch" in ch for ch in c.challenged_by):
+        if c.context_match.startswith("indirect") and _has(c, "context_mismatch"):
             return "context_mismatch", f"Evidence previously read as applicable is from a different context ({c.source_id})."
+
+    # 5. Genuinely new support.
     for c in fresh:
         if c.label == "supports" and c.context_match == "direct" and c.study_design not in ("review", "not_reported"):
             return "new_direct_evidence", f"New directly-applicable supporting evidence ({c.source_id})."
@@ -208,12 +238,9 @@ def run_watch(
             # Claims are carried forward UNLESS their source was examined again in this run.
             # A re-examined source yields fresh claims that supersede the old ones, so
             # retractions, critic demotions and corrections still take effect.
-            carried: list[EvidenceClaim] = []
-            if previous:
-                refreshed = set(ctx.retrieved)
-                carried = [
-                    c for c in store.get_claims(previous.claim_ids) if c.source_id not in refreshed
-                ]
+            previous_claims = store.get_claims(previous.claim_ids) if previous else []
+            refreshed = set(ctx.retrieved)
+            carried = [c for c in previous_claims if c.source_id not in refreshed]
             claims = carried + gate_result.accepted
 
             editor_out = _editor_output(result)
@@ -252,7 +279,7 @@ def run_watch(
                 fingerprint=fingerprint,
             )
 
-            change = _detect_change(previous, claims, new_ids)
+            change = _detect_change(previous, previous_claims, claims, new_ids)
             review = None
             if change:
                 reason, explanation = change

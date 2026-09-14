@@ -117,7 +117,7 @@ def env(tmp_path, monkeypatch):
     store.close()
 
 
-def source(sid: str, abstract: str) -> SourceRecord:
+def source(sid: str, abstract: str, is_corrected: bool = False) -> SourceRecord:
     return SourceRecord(
         source_id=sid,
         pmid=sid,
@@ -125,6 +125,7 @@ def source(sid: str, abstract: str) -> SourceRecord:
         url=f"https://europepmc.org/article/MED/{sid}",
         abstract=abstract,
         access_level="abstract_only",
+        is_corrected=is_corrected,
     )
 
 
@@ -462,3 +463,31 @@ def test_a_source_re_examined_later_supersedes_its_earlier_claims(env):
     assert profile.direct_support == 0, "the superseded supporting claim must be gone"
     assert profile.opposing == 1
     assert profile.independent_sources == 1, "the source must not be double counted"
+
+
+def test_a_retraction_on_an_already_tracked_source_reaches_the_inbox(env):
+    """The headline promise: 'miss a retraction and you cite a finding that no longer exists.'
+
+    The retracted paper is not a NEW source and the finding text is unchanged, so its
+    claim id is identical. Change detection that only looks for unseen claim ids will
+    absorb the retraction silently - the single worst outcome for this product.
+    """
+    settings, store, monkeypatch = env
+
+    install_graph(monkeypatch, [source("111", ABSTRACT_A)], analyst_json(SUPPORT))
+    controller.run_watch("w1", settings=settings, store=store, verbose=False)
+    assert store.latest_dossier("kras-egfr").profile.direct_support == 1
+    assert len(store.list_inbox("w1")) == 0
+
+    # Same paper, same finding, but the record is now flagged as corrected/retracted.
+    install_graph(
+        monkeypatch, [source("111", ABSTRACT_A, is_corrected=True)], analyst_json(SUPPORT)
+    )
+    controller.run_watch("w1", settings=settings, store=store, verbose=False)
+
+    inbox = store.list_inbox("w1")
+    assert len(inbox) == 1, "a retraction of a tracked source must raise exactly one alert"
+    assert inbox[0].reason == "source_corrected"
+    assert store.latest_dossier("kras-egfr").profile.direct_support == 0, (
+        "a corrected source can no longer read as clean direct support"
+    )

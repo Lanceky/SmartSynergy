@@ -31,7 +31,11 @@ ContextMatch = Literal[
 AccessLevel = Literal["open_access", "abstract_only", "metadata_only"]
 Coverage = Literal["complete", "truncated", "failed", "not_retrieved", "not_applicable"]
 ChangeReason = Literal[
-    "new_counterevidence", "context_mismatch", "source_corrected", "new_direct_evidence"
+    "new_counterevidence",
+    "context_mismatch",
+    "source_corrected",
+    "new_direct_evidence",
+    "assessment_flipped",
 ]
 RunStatus = Literal["running", "completed", "failed", "failed_gate", "failed_stale"]
 RunTrigger = Literal["scheduled", "manual", "replay"]
@@ -332,6 +336,7 @@ class ReviewItem(BaseModel):
         because acting on a retracted or misapplied result is the costlier mistake.
         """
         return {
+            "assessment_flipped": 5,
             "new_counterevidence": 4,
             "source_corrected": 3,
             "context_mismatch": 2,
